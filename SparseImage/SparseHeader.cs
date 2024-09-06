@@ -4,10 +4,7 @@
  * the GNU Lesser Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
  */
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using Utilities;
 
 namespace SparseConverter
@@ -20,7 +17,7 @@ namespace SparseConverter
     {
         public const uint ValidSignature = 0xed26ff3a;
         public const int Length = 28;
-        
+
         public uint Magic;
         public ushort MajorVersion;
         public ushort MinorVersion;

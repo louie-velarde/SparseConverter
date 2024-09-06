@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using Utilities;
 
 namespace SparseConverter
@@ -111,7 +110,7 @@ namespace SparseConverter
             string imageFileName = Path.GetFileName(inputPath);
             string prefix = outputPath + imageFileName + "_sparsechunk";
             int sparseIndex = 1;
-            while(true)
+            while (true)
             {
                 string sparsePath = prefix + sparseIndex.ToString();
                 FileStream output;
@@ -206,7 +205,7 @@ namespace SparseConverter
                 {
                     SparseDecompressionHelper.DecompressSparse(input, output);
                 }
-                catch(ArgumentException)
+                catch (ArgumentException)
                 {
                     Console.WriteLine("Invalid Sparse Image Format");
                     return;
@@ -243,46 +242,46 @@ namespace SparseConverter
             Console.WriteLine("Total Blocks: " + sparseHeader.TotalBlocks);
             Console.WriteLine("Total Chunks: " + sparseHeader.TotalChunks);
             long outputSize = 0;
-            for(uint index = 0; index < sparseHeader.TotalChunks; index++)
+            for (uint index = 0; index < sparseHeader.TotalChunks; index++)
             {
                 ChunkHeader chunkHeader = ChunkHeader.Read(stream);
                 Console.Write("Chunk type: {0}, size: {1}, total size: {2}", chunkHeader.ChunkType.ToString(), chunkHeader.ChunkSize, chunkHeader.TotalSize);
                 int dataLength = (int)(chunkHeader.ChunkSize * sparseHeader.BlockSize);
-                switch(chunkHeader.ChunkType)
+                switch (chunkHeader.ChunkType)
                 {
                     case ChunkType.Raw:
-                    {
-                        SparseDecompressionHelper.ReadBytes(stream, dataLength);
-                        Console.WriteLine();
-                        outputSize += dataLength;
-                        break;
-                    }
+                        {
+                            SparseDecompressionHelper.ReadBytes(stream, dataLength);
+                            Console.WriteLine();
+                            outputSize += dataLength;
+                            break;
+                        }
                     case ChunkType.Fill:
-                    {
-                        byte[] fillBytes = SparseDecompressionHelper.ReadBytes(stream, 4);
-                        uint fill = LittleEndianConverter.ToUInt32(fillBytes, 0);
-                        Console.WriteLine(", value: 0x{0}", fill.ToString("X8"));
-                        outputSize += dataLength;
-                        break;
-                    }
+                        {
+                            byte[] fillBytes = SparseDecompressionHelper.ReadBytes(stream, 4);
+                            uint fill = LittleEndianConverter.ToUInt32(fillBytes, 0);
+                            Console.WriteLine(", value: 0x{0}", fill.ToString("X8"));
+                            outputSize += dataLength;
+                            break;
+                        }
                     case ChunkType.DontCare:
-                    {
-                        Console.WriteLine();
-                        break;
-                    }
+                        {
+                            Console.WriteLine();
+                            break;
+                        }
                     case ChunkType.CRC:
-                    {
-                        byte[] crcBytes = SparseDecompressionHelper.ReadBytes(stream, 4);
-                        uint crc = LittleEndianConverter.ToUInt32(crcBytes, 0);
-                        Console.WriteLine(", value: 0x{0}", crc.ToString("X8"));
-                        break;
-                    }
+                        {
+                            byte[] crcBytes = SparseDecompressionHelper.ReadBytes(stream, 4);
+                            uint crc = LittleEndianConverter.ToUInt32(crcBytes, 0);
+                            Console.WriteLine(", value: 0x{0}", crc.ToString("X8"));
+                            break;
+                        }
                     default:
-                    {
-                        Console.WriteLine();
-                        Console.WriteLine("Error: Invalid Chunk Type");
-                        return;
-                    }
+                        {
+                            Console.WriteLine();
+                            Console.WriteLine("Error: Invalid Chunk Type");
+                            return;
+                        }
                 }
             }
             stream.Close();

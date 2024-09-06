@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Utilities
 {
@@ -61,7 +59,7 @@ namespace Utilities
             if (!BitConverter.IsLittleEndian)
             {
                 // reverse the order of 'bytes'
-                for(int index = 0; index < 4; index++)
+                for (int index = 0; index < 4; index++)
                 {
                     byte temp = bytes[index];
                     bytes[index] = bytes[7 - index];

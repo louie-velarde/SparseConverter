@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -124,7 +123,7 @@ namespace Utilities
             byte[] bytes = ASCIIEncoding.GetEncoding(28591).GetBytes(value);
             stream.Write(bytes, 0, Math.Min(bytes.Length, fieldLength));
             if (bytes.Length < fieldLength)
-            { 
+            {
                 byte[] zeroFill = new byte[fieldLength - bytes.Length];
                 stream.Write(zeroFill, 0, zeroFill.Length);
             }
