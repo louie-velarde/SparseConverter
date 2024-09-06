@@ -1,26 +1,20 @@
-About:
-======
-Android fastboot stores each file it receives in RAM before flashing it to your Android device.  
-For this reason, large partitions (such as the /system partition) must be splitted using the "compressed ext4 file system sparse image format", this format is defined by the AOSP (Android Open Source Project) and was designed for the single purpose of flashing a large partition.  
+# Sparse Converter
 
-If you tried to flash system.img from backup and received the "Invalid sparse file format at header magi" error, you have come to the right place.  
+*SparseConverter* is a tool that can create / decompress compressed EXT4 filesystem sparse image format (e.g. super.img.0).
+It can also decompress sparse Android data image (e.g. system.new.dat) into an EXT4 filesystem image.
 
-The solution:
-=============
-SparseConverter is a tool that can create / decompress compressed ext4 file system sparse image format (e.g. system.img_sparsechunk1).  
+**DISCLAMER**: The software may contain bugs and/or limitations. The authors take no responsibility for any damage/s that may occur.
 
-> Note for Motorola phone owners:  
-> The factory images from Motorola contains a 128KB motorola header and a 4KB motorola footer, if you decompress those images you may want to remove the header and footer.  
-> I had no problem using the standard Android fastboot with my unlocked Moto G and flashing images without the Motorola header / footer.  
-> (If you keep the header / footer, then you must use Motorola's fastboot)
+## Usage Examples
 
-Usage Examples:
----------------
 `SparseConverter.exe /compress D:\system.img E:\ 256MB`  
-( will compress D:\system.img to 256MB sparse files starting from E:\system.img_sparsechunk1 )  
-`SparseConverter.exe /decompress E:\system.img_sparsechunk1 D:\system.img`  
-( will decompress E:\system.img_sparsechunk1, E:\system.img_sparsechunk2 and etc. to D:\system.img )  
+will compress D:\system.img to 256MB sparse files starting from E:\system.img_sparsechunk1  
+`SparseConverter.exe /decompress E:\super.img.0 D:\system.img`  
+will decompress E:\super.img.0, E:\super.img.1, etc. to D:\system.img  
+`SparseConverter.exe /decompressData E:\system.transfer.list E:\system.new.dat D:\system.img`  
+will decompress E:\system.new.dat to D:\system.img using instructions in E:\system.transfer.list
 
-The software may contain bugs and/or limitations that may result in damage to your phone, I take no responsibility for any damage that may occur.  
+## CREDITS
 
-For additional information about the "compressed ext4 file system sparse image format" see libsparse/sparse_format.h  
+[@TalAloni](https://github.com/TalAloni) for the upstream repo  
+[@xpirt](https://github.com/xpirt) for the [Python code](https://github.com/xpirt/sdat2img/blob/1b08432247fce8037fd6a43685c6e7037a2e553a/sdat2img.py) on which /decompressData is based on
