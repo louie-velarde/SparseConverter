@@ -1,6 +1,6 @@
 # Sparse Converter
 
-*SparseConverter* is a tool that can create / decompress compressed EXT4 file system sparse image format (e.g. super.img.0).
+*SparseConverter* is a tool that can create / decompress compressed EXT4 file system sparse image (e.g. super.img.0).
 It can also decompress sparse Android data image (e.g. system.new.dat) into an EXT4 file system image.
 
 **DISCLAMER**: The software may contain bugs and/or limitations. The authors take no responsibility for any damage/s that may occur.
