@@ -33,7 +33,7 @@ namespace SparseConverter
                 }
                 else
                 {
-                    PrintHelp();
+                    Console.WriteLine("<max-sparse-size> must be greater than 66KB");
                     return;
                 }
             }
@@ -48,6 +48,15 @@ namespace SparseConverter
                 List<string> sparseList = GetSparseList(inputPath);
                 Decompress(sparseList, outputPath);
             }
+            else if (String.Equals(args[0], "/decompressData", StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (args.Length != 4)
+                {
+                    PrintHelp();
+                    return;
+                }
+                DecompressData(args[1], args[2], args[3]);
+            }
             else if (String.Equals(args[0], "/stats", StringComparison.InvariantCultureIgnoreCase))
             {
                 PrintSparseImageStatistics(inputPath);
@@ -61,15 +70,42 @@ namespace SparseConverter
         private static void PrintHelp()
         {
             Console.WriteLine("SparseConverter v" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version);
-            Console.WriteLine("Author: Tal Aloni (tal.aloni.il@gmail.com)");
-            Console.WriteLine("About:");
-            Console.WriteLine("This software is designed to create / decompress compressed ext4 file system");
-            Console.WriteLine("sparse image format, which is defined by AOSP.");
+            Console.WriteLine("Copyright 2014 Tal Aloni (tal.aloni.il@gmail.com)");
+            Console.WriteLine("Copyright 2024 Louie Velarde");
             Console.WriteLine();
             Console.WriteLine("Usage:");
             Console.WriteLine("SparseConverter /compress <image-path> <output-folder> <max-sparse-size>");
             Console.WriteLine("SparseConverter /decompress <first-sparse-path> <output-image-path>");
+            Console.WriteLine("SparseConverter /decompressData <transfer-list-path> <dat-path> <output-image-path>");
             Console.WriteLine("SparseConverter /stats <sparse-path>");
+        }
+
+        private static long ParseStandardSizeString(string value)
+        {
+            if (value.ToUpper().EndsWith("TB"))
+            {
+                return (long)1024 * 1024 * 1024 * 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+            }
+            else if (value.ToUpper().EndsWith("GB"))
+            {
+                return 1024 * 1024 * 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+            }
+            else if (value.ToUpper().EndsWith("MB"))
+            {
+                return 1024 * 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+            }
+            else if (value.ToUpper().EndsWith("KB"))
+            {
+                return 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+            }
+            if (value.ToUpper().EndsWith("B"))
+            {
+                return Conversion.ToInt64(value.Substring(0, value.Length - 1), -1);
+            }
+            else
+            {
+                return Conversion.ToInt64(value, -1);
+            }
         }
 
         private static void Compress(string inputPath, string outputPath, long maxSparseSize)
@@ -288,32 +324,62 @@ namespace SparseConverter
             Console.WriteLine("Output size: {0}", outputSize);
         }
 
-        public static long ParseStandardSizeString(string value)
+        private static void DecompressData(string transferListPath, string datPath, string outputPath)
         {
-            if (value.ToUpper().EndsWith("TB"))
+            FileStream output;
+            try
             {
-                return (long)1024 * 1024 * 1024 * 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+                output = File.Open(outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+                output.SetLength(0);
             }
-            else if (value.ToUpper().EndsWith("GB"))
+            catch (IOException)
             {
-                return 1024 * 1024 * 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+                Console.WriteLine("Cannot open " + outputPath);
+                return;
             }
-            else if (value.ToUpper().EndsWith("MB"))
+            catch (UnauthorizedAccessException)
             {
-                return 1024 * 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+                Console.WriteLine("Cannot open {0} - Access Denied", outputPath);
+                return;
             }
-            else if (value.ToUpper().EndsWith("KB"))
+
+            FileStream transferList;
+            try
             {
-                return 1024 * Conversion.ToInt64(value.Substring(0, value.Length - 2), -1);
+                transferList = File.Open(transferListPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             }
-            if (value.ToUpper().EndsWith("B"))
+            catch (IOException)
             {
-                return Conversion.ToInt64(value.Substring(0, value.Length - 1), -1);
+                Console.WriteLine("Cannot open " + transferListPath);
+                return;
             }
-            else
+            catch (UnauthorizedAccessException)
             {
-                return Conversion.ToInt64(value, -1);
+                Console.WriteLine("Cannot open {0} - Access Denied", transferListPath);
+                return;
             }
+
+            FileStream dat;
+            try
+            {
+                dat = File.Open(transferListPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            }
+            catch (IOException)
+            {
+                Console.WriteLine("Cannot open " + datPath);
+                return;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Console.WriteLine("Cannot open {0} - Access Denied", datPath);
+                return;
+            }
+
+            Console.WriteLine("Output: {0}", outputPath);
+            SparseDataDecompressionHelper.DecompressSparse(transferList, dat, output);
+            dat.Close();
+            transferList.Close();
+            output.Close();
         }
     }
 }
