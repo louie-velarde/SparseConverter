@@ -4,7 +4,6 @@
  * the GNU Lesser Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
  */
-using System;
 using System.IO;
 using Utilities;
 
@@ -14,12 +13,7 @@ namespace SparseConverter
     {
         public static void DecompressSparse(Stream input, Stream output)
         {
-            SparseHeader sparseHeader = SparseHeader.Read(input);
-            if (sparseHeader == null)
-            {
-                throw new ArgumentException("Invalid Sparse Image Format");
-            }
-
+            SparseHeader sparseHeader = SparseHeader.Read(input) ?? throw new InvalidDataException("Invalid Sparse Image Format");
             output.Seek(0, SeekOrigin.Begin);
             for (uint index = 0; index < sparseHeader.TotalChunks; index++)
             {
@@ -51,16 +45,15 @@ namespace SparseConverter
                         }
                     case ChunkType.CRC:
                         {
-                            byte[] crcBytes = ReadBytes(input, 4);
+                            ReadBytes(input, 4);
                             break;
                         }
                     default:
                         {
-                            throw new ArgumentException("Error: Invalid Chunk Type");
+                            throw new InvalidDataException("Error: Invalid Chunk Type");
                         }
                 }
             }
-            input.Close();
         }
 
         public static byte[] ReadBytes(Stream stream, int length)

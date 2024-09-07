@@ -44,7 +44,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SparseData\SparseDataDecompressionHelper.cs" />
+    <Compile Include="SparseData\SparseDataHelper.cs" />
     <Compile Include="SparseImage\ChunkHeader.cs" />
     <Compile Include="SparseImage\SparseDecompressionHelper.cs" />
     <Compile Include="SparseImage\SparseCompressionHelper.cs" />

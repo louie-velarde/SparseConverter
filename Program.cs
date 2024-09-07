@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using Utilities;
 
 namespace SparseConverter
@@ -17,54 +18,45 @@ namespace SparseConverter
             }
 
             string inputPath = args[1];
-            if (String.Equals(args[0], "/compress", StringComparison.InvariantCultureIgnoreCase))
+            if (string.Equals(args[0], "/c", StringComparison.InvariantCultureIgnoreCase) ||
+                string.Equals(args[0], "/compress", StringComparison.InvariantCultureIgnoreCase))
             {
-                if (args.Length != 4)
+                if (args.Length == 4)
                 {
-                    PrintHelp();
-                    return;
-                }
-                string outputPath = args[2];
-                long maxSparseSize = ParseStandardSizeString(args[3]);
-                int minSparseSize = SparseHeader.Length + 3 * ChunkHeader.Length + SparseCompressionHelper.BlockSize;
-                if (maxSparseSize >= minSparseSize)
-                {
-                    Compress(inputPath, outputPath, maxSparseSize);
-                }
-                else
-                {
-                    Console.WriteLine("<max-sparse-size> must be greater than 66KB");
+                    long maxSparseSize = ParseStandardSizeString(args[3]);
+                    long minSparseSize = SparseHeader.Length + 3 * ChunkHeader.Length + SparseCompressionHelper.BlockSize;
+                    if (maxSparseSize < minSparseSize)
+                    {
+                        throw new ArgumentException("<max-sparse-size> must be greater than 66KB");
+                    }
+                    Compress(inputPath, args[2], maxSparseSize);
                     return;
                 }
             }
-            else if (String.Equals(args[0], "/decompress", StringComparison.InvariantCultureIgnoreCase))
+            else if (string.Equals(args[0], "/d", StringComparison.InvariantCultureIgnoreCase) ||
+                string.Equals(args[0], "/decompress", StringComparison.InvariantCultureIgnoreCase))
             {
-                if (args.Length != 3)
+                if (args.Length == 3)
                 {
-                    PrintHelp();
+                    var sparseList = GetSparseList(inputPath);
+                    Decompress(sparseList, args[2]);
                     return;
                 }
-                string outputPath = args[2];
-                List<string> sparseList = GetSparseList(inputPath);
-                Decompress(sparseList, outputPath);
-            }
-            else if (String.Equals(args[0], "/decompressData", StringComparison.InvariantCultureIgnoreCase))
-            {
-                if (args.Length != 4)
+                if (args.Length == 4)
                 {
-                    PrintHelp();
+                    Decompress(inputPath, args[2], args[3]);
                     return;
                 }
-                DecompressData(args[1], args[2], args[3]);
             }
-            else if (String.Equals(args[0], "/stats", StringComparison.InvariantCultureIgnoreCase))
+            else if (string.Equals(args[0], "/stats", StringComparison.InvariantCultureIgnoreCase))
             {
-                PrintSparseImageStatistics(inputPath);
+                if (args.Length == 2)
+                {
+                    PrintSparseImageStatistics(inputPath);
+                    return;
+                }
             }
-            else
-            {
-                PrintHelp();
-            }
+            PrintHelp();
         }
 
         private static void PrintHelp()
@@ -74,9 +66,9 @@ namespace SparseConverter
             Console.WriteLine("Copyright 2024 Louie Velarde");
             Console.WriteLine();
             Console.WriteLine("Usage:");
-            Console.WriteLine("SparseConverter /compress <image-path> <output-folder> <max-sparse-size>");
-            Console.WriteLine("SparseConverter /decompress <first-sparse-path> <output-image-path>");
-            Console.WriteLine("SparseConverter /decompressData <transfer-list-path> <dat-path> <output-image-path>");
+            Console.WriteLine("SparseConverter /c[ompress] <image-path> <output-folder> <max-sparse-size>");
+            Console.WriteLine("SparseConverter /d[ecompress] <first-sparse-path> <output-image-path>");
+            Console.WriteLine("SparseConverter /d[ecompress] <dat-path> <output-image-path> <transfer-list-path>");
             Console.WriteLine("SparseConverter /stats <sparse-path>");
         }
 
@@ -110,89 +102,54 @@ namespace SparseConverter
 
         private static void Compress(string inputPath, string outputPath, long maxSparseSize)
         {
-            FileStream input;
-            try
+            using (var input = new FileStream(inputPath, FileMode.Open))
             {
-                input = File.Open(inputPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            }
-            catch (IOException)
-            {
-                Console.WriteLine("Cannot open " + inputPath);
-                return;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine("Cannot open {0} - Access Denied", inputPath);
-                return;
-            }
-
-            if (input.Length % SparseCompressionHelper.BlockSize > 0)
-            {
-                Console.WriteLine("Image size is not a multiple of {0} bytes", SparseCompressionHelper.BlockSize);
-                return;
-            }
-
-            if (!Directory.Exists(outputPath))
-            {
-                Console.WriteLine("Output directory does not exist");
-                return;
-            }
-
-            if (!outputPath.EndsWith(":") && !outputPath.EndsWith(@"\"))
-            {
-                outputPath += @"\";
-            }
-
-            string imageFileName = Path.GetFileName(inputPath);
-            string prefix = outputPath + imageFileName + "_sparsechunk";
-            int sparseIndex = 1;
-            while (true)
-            {
-                string sparsePath = prefix + sparseIndex.ToString();
-                FileStream output;
-                try
+                if (input.Length % SparseCompressionHelper.BlockSize > 0)
                 {
-                    output = File.Open(sparsePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-                    output.SetLength(0);
+                    throw new InvalidDataException($"{inputPath} size is not a multiple of {SparseCompressionHelper.BlockSize} bytes.");
                 }
-                catch (IOException)
-                {
-                    Console.WriteLine("Cannot open " + sparsePath);
-                    return;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    Console.WriteLine("Cannot open {0} - Access Denied", sparsePath);
-                    return;
-                }
+                Directory.CreateDirectory(outputPath);
 
-                Console.WriteLine("Writing: {0}", sparsePath);
-                bool complete = SparseCompressionHelper.WriteCompressedSparse(input, output, maxSparseSize);
-                if (complete)
+                string prefix = $"{Path.GetFileName(inputPath)}_sparsechunk";
+
+                int sparseIndex = 0;
+                bool complete;
+                do
                 {
-                    break;
+                    string sparsePath = Path.Combine(outputPath, $"{prefix}{++sparseIndex}");
+                    using (var output = new FileStream(sparsePath, FileMode.CreateNew))
+                    {
+                        Console.WriteLine($"Writing {Path.GetFullPath(sparsePath)}...");
+                        complete = SparseCompressionHelper.WriteCompressedSparse(input, output, maxSparseSize);
+                    }
                 }
-                sparseIndex++;
+                while (!complete);
             }
-            input.Close();
         }
 
         private static List<string> GetSparseList(string inputPath)
         {
-            List<string> sparseList = new List<string>();
-            sparseList.Add(inputPath);
-            if (inputPath.EndsWith("0") || inputPath.EndsWith("1"))
+            var sparseList = new List<string>();
+
+            var regex = new Regex(@"(.+?)(\d+)");
+            var match = regex.Match(inputPath);
+
+            if (match.Success)
             {
-                int firstSparseIndex = Convert.ToInt32(inputPath.Substring(inputPath.Length - 1));
-                string prefix = inputPath.Substring(0, inputPath.Length - 1);
-                int sparseIndex = firstSparseIndex + 1;
-                string sparsePath = prefix + sparseIndex.ToString();
-                while (File.Exists(sparsePath))
+                string prefix = match.Groups[1].Value;
+
+                int sparseIndex = Convert.ToInt32(match.Groups[2].Value);
+                string sparsePath = inputPath;
+                do
                 {
                     sparseList.Add(sparsePath);
-                    sparseIndex++;
-                    sparsePath = prefix + sparseIndex.ToString();
+                    sparsePath = prefix + ++sparseIndex;
                 }
+                while (File.Exists(sparsePath));
+            }
+            else
+            {
+                sparseList.Add(inputPath);
             }
 
             return sparseList;
@@ -200,186 +157,90 @@ namespace SparseConverter
 
         private static void Decompress(List<string> sparseList, string outputPath)
         {
-            FileStream output;
-            try
+            string outputDirectory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+            if (outputDirectory != null && outputDirectory.Length > 0)
             {
-                output = File.Open(outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-                output.SetLength(0);
-            }
-            catch (IOException)
-            {
-                Console.WriteLine("Cannot open " + outputPath);
-                return;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine("Cannot open {0} - Access Denied", outputPath);
-                return;
+                Directory.CreateDirectory(outputDirectory);
             }
 
-            Console.WriteLine("Output: {0}", outputPath);
-            foreach (string sparsePath in sparseList)
+            using (var output = new FileStream(outputPath, FileMode.CreateNew))
             {
-                FileStream input;
-                try
+                Console.WriteLine($"Writing {Path.GetFullPath(outputPath)}...");
+                foreach (string sparsePath in sparseList)
                 {
-                    input = File.Open(sparsePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using (var input = new FileStream(sparsePath, FileMode.Open))
+                    {
+                        Console.WriteLine($"Processing {Path.GetFullPath(sparsePath)}...");
+                        SparseDecompressionHelper.DecompressSparse(input, output);
+                    }
                 }
-                catch (IOException)
-                {
-                    Console.WriteLine("Cannot open " + sparsePath);
-                    return;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    Console.WriteLine("Cannot open {0} - Access Denied", sparsePath);
-                    return;
-                }
-                Console.WriteLine("Processing: {0}", sparsePath);
-
-                try
-                {
-                    SparseDecompressionHelper.DecompressSparse(input, output);
-                }
-                catch (ArgumentException)
-                {
-                    Console.WriteLine("Invalid Sparse Image Format");
-                    return;
-                }
+                Console.WriteLine("DONE!");
             }
-            output.Close();
+        }
+
+        private static void Decompress(string inputPath, string outputPath, string transferListPath)
+        {
+            string outputDirectory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+            if (outputDirectory != null && outputDirectory.Length > 0)
+            {
+                Directory.CreateDirectory(outputDirectory);
+            }
+
+            using (FileStream
+                input = new FileStream(inputPath, FileMode.Open),
+                output = new FileStream(outputPath, FileMode.CreateNew),
+                transferList = new FileStream(transferListPath, FileMode.Open))
+            {
+                Console.WriteLine($"Writing {Path.GetFullPath(outputPath)}...");
+                SparseDataHelper.DecompressSparse(input, output, transferList);
+                Console.WriteLine("DONE!");
+            }
         }
 
         private static void PrintSparseImageStatistics(string path)
         {
-            FileStream stream;
-            try
+            using (var stream = new FileStream(path, FileMode.Open))
             {
-                stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            }
-            catch (IOException)
-            {
-                Console.WriteLine("Cannot open " + path);
-                return;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine("Cannot open {0} - Access Denied", path);
-                return;
-            }
+                var sparseHeader = SparseHeader.Read(stream) ?? throw new InvalidDataException("Invalid Sparse Image Format");
+                Console.WriteLine("Total Blocks: " + sparseHeader.TotalBlocks);
+                Console.WriteLine("Total Chunks: " + sparseHeader.TotalChunks);
 
-            SparseHeader sparseHeader = SparseHeader.Read(stream);
-            if (sparseHeader == null)
-            {
-                Console.WriteLine("Invalid Sparse Image Format");
-                return;
-            }
-
-            Console.WriteLine("Total Blocks: " + sparseHeader.TotalBlocks);
-            Console.WriteLine("Total Chunks: " + sparseHeader.TotalChunks);
-            long outputSize = 0;
-            for (uint index = 0; index < sparseHeader.TotalChunks; index++)
-            {
-                ChunkHeader chunkHeader = ChunkHeader.Read(stream);
-                Console.Write("Chunk type: {0}, size: {1}, total size: {2}", chunkHeader.ChunkType.ToString(), chunkHeader.ChunkSize, chunkHeader.TotalSize);
-                int dataLength = (int)(chunkHeader.ChunkSize * sparseHeader.BlockSize);
-                switch (chunkHeader.ChunkType)
+                long outputSize = 0;
+                for (uint index = 0; index < sparseHeader.TotalChunks; ++index)
                 {
-                    case ChunkType.Raw:
-                        {
+                    var chunkHeader = ChunkHeader.Read(stream);
+                    Console.Write($"Chunk Type: {chunkHeader.ChunkType}, Size: {chunkHeader.ChunkSize}, Total Size: {chunkHeader.TotalSize}");
+
+                    int dataLength = (int)(chunkHeader.ChunkSize * sparseHeader.BlockSize);
+                    switch (chunkHeader.ChunkType)
+                    {
+                        case ChunkType.Raw:
                             SparseDecompressionHelper.ReadBytes(stream, dataLength);
                             Console.WriteLine();
                             outputSize += dataLength;
                             break;
-                        }
-                    case ChunkType.Fill:
-                        {
+                        case ChunkType.Fill:
                             byte[] fillBytes = SparseDecompressionHelper.ReadBytes(stream, 4);
                             uint fill = LittleEndianConverter.ToUInt32(fillBytes, 0);
-                            Console.WriteLine(", value: 0x{0}", fill.ToString("X8"));
+                            Console.WriteLine($", Value: 0x{fill:X8}");
                             outputSize += dataLength;
                             break;
-                        }
-                    case ChunkType.DontCare:
-                        {
+                        case ChunkType.DontCare:
                             Console.WriteLine();
                             break;
-                        }
-                    case ChunkType.CRC:
-                        {
+                        case ChunkType.CRC:
                             byte[] crcBytes = SparseDecompressionHelper.ReadBytes(stream, 4);
                             uint crc = LittleEndianConverter.ToUInt32(crcBytes, 0);
-                            Console.WriteLine(", value: 0x{0}", crc.ToString("X8"));
+                            Console.WriteLine($", Value: 0x{crc:X8}");
                             break;
-                        }
-                    default:
-                        {
+                        default:
                             Console.WriteLine();
                             Console.WriteLine("Error: Invalid Chunk Type");
                             return;
-                        }
+                    }
                 }
+                Console.WriteLine($"Output Size: {outputSize}");
             }
-            stream.Close();
-            Console.WriteLine("Output size: {0}", outputSize);
-        }
-
-        private static void DecompressData(string transferListPath, string datPath, string outputPath)
-        {
-            FileStream output;
-            try
-            {
-                output = File.Open(outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-                output.SetLength(0);
-            }
-            catch (IOException)
-            {
-                Console.WriteLine("Cannot open " + outputPath);
-                return;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine("Cannot open {0} - Access Denied", outputPath);
-                return;
-            }
-
-            FileStream transferList;
-            try
-            {
-                transferList = File.Open(transferListPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            }
-            catch (IOException)
-            {
-                Console.WriteLine("Cannot open " + transferListPath);
-                return;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine("Cannot open {0} - Access Denied", transferListPath);
-                return;
-            }
-
-            FileStream dat;
-            try
-            {
-                dat = File.Open(transferListPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            }
-            catch (IOException)
-            {
-                Console.WriteLine("Cannot open " + datPath);
-                return;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine("Cannot open {0} - Access Denied", datPath);
-                return;
-            }
-
-            Console.WriteLine("Output: {0}", outputPath);
-            SparseDataDecompressionHelper.DecompressSparse(transferList, dat, output);
-            dat.Close();
-            transferList.Close();
-            output.Close();
         }
     }
 }

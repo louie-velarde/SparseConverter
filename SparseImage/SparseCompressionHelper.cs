@@ -4,7 +4,6 @@
  * the GNU Lesser Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
  */
-using System;
 using System.IO;
 using Utilities;
 
@@ -14,8 +13,6 @@ namespace SparseConverter
     {
         public const int BlockSize = 65536;
 
-        /// <param name="sparseIndex">one-based index</param>
-        /// <returns>True if the write was complete (i.e. this was the last sparse)</returns>
         public static bool WriteCompressedSparse(Stream input, Stream output, long maxSparseSize)
         {
             // We will write the header later
@@ -40,7 +37,7 @@ namespace SparseConverter
             {
                 byte[] block = new byte[BlockSize];
                 input.Read(block, 0, BlockSize);
-                byte[] currentFill = SparseCompressionHelper.TryToCompressBlock(block);
+                byte[] currentFill = TryToCompressBlock(block);
 
                 if (fill != null)
                 {
@@ -110,21 +107,21 @@ namespace SparseConverter
             }
 
             output.Seek(0, SeekOrigin.Begin);
-            SparseHeader sparseHeader = new SparseHeader();
-            sparseHeader.BlockSize = BlockSize;
-            sparseHeader.TotalBlocks = (uint)(input.Length / BlockSize);
-            sparseHeader.TotalChunks = chunkCount;
+            SparseHeader sparseHeader = new SparseHeader
+            {
+                BlockSize = BlockSize,
+                TotalBlocks = (uint)(input.Length / BlockSize),
+                TotalChunks = chunkCount
+            };
             sparseHeader.WriteBytes(output);
-            output.Close();
-
             return complete;
         }
 
-        public static byte[] TryToCompressBlock(byte[] block)
+        private static byte[] TryToCompressBlock(byte[] block)
         {
             if (block.Length % 4 > 0)
             {
-                throw new ArgumentException("Block size must be a multiple of 4 bytes");
+                throw new InvalidDataException("Block size must be a multiple of 4 bytes");
             }
             byte[] fill = ByteReader.ReadBytes(block, 0, 4);
             for (int offset = 4; offset < block.Length; offset += 4)
@@ -141,23 +138,27 @@ namespace SparseConverter
             return fill;
         }
 
-        public static void WriteFillChunk(Stream output, byte[] fill, uint blockCount)
+        private static void WriteFillChunk(Stream output, byte[] fill, uint blockCount)
         {
-            ChunkHeader chunkHeader = new ChunkHeader();
-            chunkHeader.ChunkType = ChunkType.Fill;
-            chunkHeader.ChunkSize = blockCount;
-            chunkHeader.TotalSize = ChunkHeader.Length + 4;
+            ChunkHeader chunkHeader = new ChunkHeader
+            {
+                ChunkType = ChunkType.Fill,
+                ChunkSize = blockCount,
+                TotalSize = ChunkHeader.Length + 4
+            };
             chunkHeader.WriteBytes(output);
 
             ByteWriter.WriteBytes(output, fill);
         }
 
-        public static void WriteRawChunk(Stream output, Stream rawChunk)
+        private static void WriteRawChunk(Stream output, Stream rawChunk)
         {
-            ChunkHeader chunkHeader = new ChunkHeader();
-            chunkHeader.ChunkType = ChunkType.Raw;
-            chunkHeader.ChunkSize = (uint)(rawChunk.Length / BlockSize);
-            chunkHeader.TotalSize = ChunkHeader.Length + (uint)rawChunk.Length;
+            ChunkHeader chunkHeader = new ChunkHeader
+            {
+                ChunkType = ChunkType.Raw,
+                ChunkSize = (uint)(rawChunk.Length / BlockSize),
+                TotalSize = ChunkHeader.Length + (uint)rawChunk.Length
+            };
             chunkHeader.WriteBytes(output);
 
             rawChunk.Seek(0, SeekOrigin.Begin);
@@ -170,12 +171,14 @@ namespace SparseConverter
             }
         }
 
-        public static void WriteDontCareChunk(Stream output, uint blockLength)
+        private static void WriteDontCareChunk(Stream output, uint blockLength)
         {
-            ChunkHeader chunkHeader = new ChunkHeader();
-            chunkHeader.ChunkType = ChunkType.DontCare;
-            chunkHeader.ChunkSize = blockLength;
-            chunkHeader.TotalSize = ChunkHeader.Length;
+            ChunkHeader chunkHeader = new ChunkHeader
+            {
+                ChunkType = ChunkType.DontCare,
+                ChunkSize = blockLength,
+                TotalSize = ChunkHeader.Length
+            };
             chunkHeader.WriteBytes(output);
         }
     }

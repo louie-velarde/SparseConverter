@@ -11,9 +11,9 @@ using System.Linq;
 
 namespace SparseConverter
 {
-    public class SparseDataDecompressionHelper
+    public class SparseDataHelper
     {
-        public static void DecompressSparse(Stream transferList, Stream dat, Stream output)
+        public static void DecompressSparse(Stream dat, Stream output, Stream transferList)
         {
             (int version, _, var commands) = ParseTransferList(transferList);
 
@@ -68,42 +68,42 @@ namespace SparseConverter
         {
             var EXPECTED_COMMANDS = Array.AsReadOnly(new string[] { "erase", "new", "zero" });
 
-            var sr = new StreamReader(transferList);
-            int version = int.Parse(sr.ReadLine());
-            int newBlocks = int.Parse(sr.ReadLine());
-
-            if (version >= 2)
+            using (var sr = new StreamReader(transferList))
             {
-                sr.ReadLine(); // Number of stash entries that are needed simultaneously
-                sr.ReadLine(); // Maximum number of blocks that will be stashed simultaneously
-            }
+                int version = int.Parse(sr.ReadLine());
+                int newBlocks = int.Parse(sr.ReadLine());
 
-            var commands = new List<Tuple<string, int[]>>();
-            for (string line; (line = sr.ReadLine()) != null;)
-            {
-                string[] parts = line.Split(' ');
-                string cmd = parts[0];
-
-                if (EXPECTED_COMMANDS.Contains(cmd))
+                if (version >= 2)
                 {
-                    int[] args = Array.ConvertAll(parts[1].Split(','), int.Parse);
-                    if (args.Length != args[0] + 1)
-                    {
-                        throw new InvalidDataException($"Invalid Command: {line}");
-                    }
-                    commands.Add(Tuple.Create(cmd, args));
+                    sr.ReadLine(); // Number of stash entries that are needed simultaneously
+                    sr.ReadLine(); // Maximum number of blocks that will be stashed simultaneously
                 }
-                else
-                {
-                    if (!int.TryParse(cmd, out _))
-                    {
-                        throw new InvalidDataException($"Unsupported Command: {cmd}");
-                    }
-                }
-            }
-            sr.Close();
 
-            return Tuple.Create(version, newBlocks, commands);
+                var commands = new List<Tuple<string, int[]>>();
+                for (string line; (line = sr.ReadLine()) != null;)
+                {
+                    string[] parts = line.Split(' ');
+                    string cmd = parts[0];
+
+                    if (EXPECTED_COMMANDS.Contains(cmd))
+                    {
+                        int[] args = Array.ConvertAll(parts[1].Split(','), int.Parse);
+                        if (args.Length != args[0] + 1)
+                        {
+                            throw new InvalidDataException($"Invalid Command: {line}");
+                        }
+                        commands.Add(Tuple.Create(cmd, args));
+                    }
+                    else
+                    {
+                        if (!int.TryParse(cmd, out _))
+                        {
+                            throw new InvalidDataException($"Unsupported Command: {cmd}");
+                        }
+                    }
+                }
+                return Tuple.Create(version, newBlocks, commands);
+            }
         }
     }
 }
